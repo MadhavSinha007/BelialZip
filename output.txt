@@ -1,0 +1,26 @@
+KJH@#@!23@@##$$%%^^&&**(()__++||}{":?><,,..//
+
+THIS_IS_NORMAL_LINE_1
+aaaaAAAaaaaAAAAaaaaAAAA1111####$$$$
+
+\x89PNG_RANDOM_FAKE_BINARY_DATA_1010101010
+000111000111000!!!@@@###$$$%%%^^^
+
+HELLO_world--->>>###@@@!!!   spaced      text
+
+[BLOCK_START]
+1110101010101010101010101010101010101010
+RANDOM_STREAM::::::||||||:::::://////\\\\\\
+[BLOCK_END]
+
+MIXED123TEXT456WITH789NUMBERS000AND111
+
+~~~~~!!!!~~~~~???????///////\\\\\\\||||||
+
+DATA_CHUNK_A: { "id": 999, "value": "xXx_RANDOM_xXx" }
+
+garbage_line_%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ASCII_OVERFLOW:::::>>>>><<<<<:::::~~~~~@@@@@#####
+
+END_OF_FILE_SIMULATION
