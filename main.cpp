@@ -3,203 +3,235 @@
 #include <thread>
 #include <vector>
 #include <string>
-#include<queue> //fifo data structure to store blocks in order of processing
-#include<mutex> //locks for thread safety when accessing shared resources like the block queue
-#include<condition_variable> //to synchronize threads and manage waiting for blocks to be processed
+#include <queue> 
+#include <mutex> 
+#include <condition_variable>
+#include <unordered_map>
+
+/*
+    Block structure
+
+    This is the core unit of data in our system.
+    Each block represents a chunk of the file.
+*/
+struct Block {
+    int id;                      // unique block ID (used to maintain order)
+    std::vector<char> data;      // actual data
+    size_t size;                 // size of valid data
+};
+
+   // huffman sructure
+   struct Node
+   {
+    /* data */
+    char ch;
+    int freq;
+    Node *left, *right;
+
+    //constructor
+    Node(char c, int f): ch(c), freq(f), left(nullptr), right(nullptr);
+   };
+   
+
 
 /* 
-    SafeQueue is a thread-safe wrapper around st::queue.
+    SafeQueue is a thread-safe wrapper around std::queue.
 
-    why we need this
-    std::queue is not thread-safe by default
-    if multiple threads push/pop simultaneously -> data corruption  will happen
+    WHY WE NEED THIS:
+    std::queue is NOT thread-safe.
+    If multiple threads push/pop at the same time → data corruption.
 
-    this class  solves that using
-    mutex -> ensures  only one thread accesses queu at a time
-    condition_variable -> makes threads wait efficently when queue is empty
-
+    This class solves that using:
+    - mutex → ensures only one thread accesses queue at a time
+    - condition_variable → makes threads wait efficiently when queue is empty
 */
 
 template <typename T>
 class SafeQueue {
-    private:
-    std::queue<T> q; // underlying queue to store data
-    std::mutex m; // mutex to protect access to queue
-    std::condition_variable cv; // condition variable to manage waiting threads
+private:
+    std::queue<T> q;                 
+    std::mutex m;                    
+    std::condition_variable cv;      
 
-    public:
-    /* 
-        push function
-
-        adds data into queue safely
-        notifies one waiting thread that new data is available
-    */
-
-    void push(T value){
-        //lock scope starts here
-        //lock_gurad automatically locks mutex on creation
-
-        std::lock_guard<std::mutex> lock(m);
-        //only one thread at a time can execute this blokc
-        //critical section -> safe access to queue
-        q.push(value); // add data to queue
-
-    }
-
-    //lock_guard goes aout of scope here -> mutex is automatically unlocked
-
-    //notify one waiting thread that new data is svailable
-    cv.notify_one();
-
-/*
-    pop function
-    waits until queue has data
-    removes and return front element safely
-*/
-
-T pop(){
-    //unique_lock allows us to lock and unlock mutex manually
-    std::unique_lock<std::mutex> lock(m);
+public:
 
     /*
-        wait mechanism
-        if queue is empty then thread sleeps
-        when push() calls nofitfy_one thread wakes up
-        lambda checks condition again to aviod spurious wakeups
+        PUSH FUNCTION
+
+        Adds data into queue safely.
+        Notifies one waiting thread that new data is available.
     */
-   cv.wait(lock, [&](){
-    return !q.empty(); //only continue when queue has data
-   });
+    void push(const T& value) {
+        {
+            std::lock_guard<std::mutex> lock(m);  // lock acquired
+            q.push(value);                        // critical section
+        }                                         // lock released automatically
 
-   //at this point, queue is not empty, and thread own the lock again
-
-   //get front elemtn
-   T val = q.front();
-
-   //remove it from queue
-   q.pop();
-
-   return val;
+        cv.notify_one(); // wake up one waiting thread
+    }
 
 
-}
+    /*
+        POP FUNCTION
 
+        Waits until queue has data.
+        Removes and returns front element safely.
+    */
+    T pop() {
+        std::unique_lock<std::mutex> lock(m);
+
+        /*
+            WAIT MECHANISM
+
+            If queue is empty → thread sleeps
+            When push() calls notify → thread wakes up
+
+            Lambda prevents spurious wakeups
+        */
+        cv.wait(lock, [&]() {
+            return !q.empty();
+        });
+
+        T val = q.front(); // get front element
+        q.pop();           // remove it
+
+        return val;
+    }
 };
 
 
-SafeQueue<Block> q1; //reader
-SafeQueue<Block> q2; // writer
+/*
+    GLOBAL QUEUES
 
-//reader block
-
-void reader(const std::string& input){
-    std::ifstream in(input, std::ios::binary);
-    int id = 0;
-
-    const size_t BLOCK_SIZE = 1024*1024; // 1Mb
-
-    while(true)
-}
+    q1: Reader → Worker
+    q2: Worker → Writer
+*/
+SafeQueue<Block> q1;
+SafeQueue<Block> q2;
 
 
+/*
+    READER FUNCTION
 
+    Reads file in chunks (blocks)
+    Pushes blocks into q1
+*/
+void reader(const std::string& input) {
 
-
-
-// A block represents a chunk of the file in memory
-struct Block {
-    int id;                     // Block number (useful for debugging / ordering)
-    std::vector<char> data;     // Actual file bytes stored in this block
-    size_t size;                // Actual number of bytes read (important for last block)
-};
-
-// Function that copies file content using block-based reading
-void copyFileContent(const std::string& input, const std::string& output) {
-
-    // Open input file in binary mode (read raw bytes)
     std::ifstream in(input, std::ios::binary);
 
-    // Open output file in binary mode (write raw bytes)
-    std::ofstream out(output, std::ios::binary);
-
-    
-
-
-/*     File handling is done in binary mode to ensure that we read/write raw bytes without any transformation (like newline conversion on windows).
-     This is crucial for accurate copying of all file types, especially non-text files like images, videos, or compressed archives, where any 
-     alteration of byte data can corrup the file, by using binary mode we ensure that the file is copied exactly as it is, preserving its integrity
-     regardless of its content. */
-
-    // Check if input file opened successfully
     if (!in) {
         std::cerr << "Error: Cannot open input file\n";
         return;
     }
 
-    // Check if output file opened successfully
+    int id = 0;
+    const size_t BLOCK_SIZE = 1024 * 1024; // 1MB blocks
+
+    while (true) {
+
+        Block block;
+        block.id = id++;
+        block.data.resize(BLOCK_SIZE);
+
+        // read data into buffer
+        in.read(block.data.data(), BLOCK_SIZE);
+
+        // actual bytes read
+        std::streamsize bytesRead = in.gcount();
+
+        if (bytesRead <= 0) break;
+
+        block.size = bytesRead;
+
+        // resize to actual size
+        block.data.resize(bytesRead);
+
+        // send to worker
+        q1.push(block);
+    }
+
+    // send end signal
+    q1.push(Block{-1, {}, 0});
+}
+
+
+/*
+    WORKER FUNCTION
+
+    Takes blocks from q1
+    (currently does nothing → later compression will be added)
+    Pushes blocks to q2
+*/
+void worker() {
+    while (true) {
+
+        Block b = q1.pop();
+
+        // check for end signal
+        if (b.id == -1) {
+            q2.push(b);
+            break;
+        }
+
+        // NO PROCESSING (yet)
+        // future: compression happens here
+
+        q2.push(b);
+    }
+}
+
+
+/*
+    WRITER FUNCTION
+
+    Takes processed blocks from q2
+    Writes them to output file
+*/
+void writer(const std::string& output) {
+
+    std::ofstream out(output, std::ios::binary);
+
     if (!out) {
         std::cerr << "Error: Cannot open output file\n";
         return;
     }
 
-    // Vector to store all file blocks in memory
-    std::vector<Block> blocks;
-
-    int id = 0; // Block counter
-
-    // Keep reading until end of file
     while (true) {
 
-        Block block;
-        block.id = id;
+        Block b = q2.pop();
 
-        // Allocate 1 MB buffer for reading file chunk
-        block.data.resize(1024 * 1024);
+        // check end signal
+        if (b.id == -1) break;
 
-        // Read up to 1 MB from file into buffer
-        in.read(block.data.data(), block.data.size());
-
-        // Get actual number of bytes read (important for last chunk)
-        std::streamsize bytesRead = in.gcount();
-
-        // If no bytes were read, file is fully consumed → exit loop
-        if (bytesRead == 0)
-            break;
-
-        // Store actual size of valid data
-        block.size = bytesRead;
-
-        // Shrink buffer to actual data size (remove unused bytes)
-        block.data.resize(bytesRead);
-
-        // Save this block into vector
-        blocks.push_back(block);
-
-        // Move to next block
-        id++;
+        // write block data
+        out.write(b.data.data(), b.size);
     }
-
-    // Write all stored blocks into output file in correct order
-    for (const auto &block : blocks) {
-        out.write(block.data.data(), block.size);
-    }
-
-    std::cout << "File copied successfully using block processing!\n";
 }
 
+
+/*
+    MAIN FUNCTION
+
+    Starts 3 threads:
+    - reader
+    - worker
+    - writer
+*/
 int main(int argc, char* argv[]) {
 
-    // Ensure user provides input and output file names
     if (argc != 3) {
-        std::cout << "Usage: ./compressor input_file output_file\n";
+        std::cout << "Usage: ./compressor input output\n";
         return 1;
     }
 
-    // Create a thread to perform file copying
-    std::thread t(copyFileContent, argv[1], argv[2]);
+    std::thread t1(reader, argv[1]);   // reader thread
+    std::thread t2(worker);            // worker thread
+    std::thread t3(writer, argv[2]);   // writer thread
 
-    // Wait for thread to finish before exiting program
-    t.join();
+    t1.join();
+    t2.join();
+    t3.join();
 
     return 0;
 }
