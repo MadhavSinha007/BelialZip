@@ -15,6 +15,7 @@ struct Block {
     int id;                     // used to maintain correct order
     std::vector<char> data;    // actual bytes of the file
     size_t size;               // valid data size
+    int validBits; //for last byte to check how many valid bits are in last byte
 };
 
 // SafeQueue is a thread-safe wrapper around std::queue
@@ -134,6 +135,32 @@ void generateCodes(HuffmanNode* root,
     generateCodes(root->right, code + "1", huffmanCode);
 }
 
+
+//bitpacketFunction
+//converts string of '0' ans '1' into bytes
+// 0100001 = > 65 stored as 1 byte
+
+std::vector<char> packBits(const std::string& bits){
+    std::vector<char> packed;
+    for(size_t i = 0; i<bits.size(); i += 8){
+        char byte = 0;
+        for(int j = 0; j<8; j++){
+            byte <<= 1;
+
+            if(i + j<bits.size() && bits[i+j] == '1'){
+                byte |= 1;
+            }
+        }
+
+        packed.push_back(byte);
+    }
+
+    return packed;
+}
+
+
+
+
 // Compress a block using Huffman encoding
 // Steps:
 // 1. Count frequency of each character
@@ -153,21 +180,26 @@ Block compressBlock(Block& input) {
     std::unordered_map<char, std::string> huffmanCode;
     generateCodes(root, "", huffmanCode);
 
-    std::string encoded;
+    //crete bit string
+    std::string bitString;
 
-    for (char c : input.data) {
-        encoded += huffmanCode[c]; // replace with code
+    for(char c: input.data){
+        bitString += huffmanCode[c];
     }
 
-    // NOTE:
-    // Currently storing '0' and '1' as characters
-    // This is NOT real compression yet
-    // Real compression requires bit packing (future step)
+
+    //packing bits into bytes
+    std::vector<char> packedData = packBits(bitString);
 
     Block output;
     output.id = input.id;
-    output.data.assign(encoded.begin(), encoded.end());
-    output.size = output.data.size();
+    output.data = packedData;
+    output.size  = packedData.size();
+
+    output.validBits = bitString.size() %8;
+    if(output.validBits == 0) {
+        output.validBits = 8;
+    }
 
     return output;
 }
