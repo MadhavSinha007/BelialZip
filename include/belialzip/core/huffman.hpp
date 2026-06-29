@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <memory>
 
-namespace belialzip::engine
+namespace belialzip::core
 {
    /*
      HuffmanNode
