@@ -38,5 +38,11 @@ namespace belialzip::core
 
     //generate huffman codes
     void generate_codes(const HuffmanNode* node, const std::string& prefix, std::unordered_map<uint8_t, std::string>& codes);
+
+    // Serialize frequency table: [count: 2 bytes] + count * [sym: 1 byte, freq: 4 bytes]
+    std::vector<uint8_t> serialize_freq_table(const std::array<uint32_t, 256>& freqs);
+
+    // Deserialize frequency table. Returns {table, bytes_consumed}.
+    std::pair<std::array<uint32_t, 256>, size_t> deserialize_freq_table(const uint8_t* data, size_t len);
     
 }

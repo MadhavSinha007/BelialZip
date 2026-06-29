@@ -1,6 +1,7 @@
 #include <belialzip/core/huffman.hpp>
 #include <queue>
 #include <algorithm>
+#include <stdexcept>
 
 namespace belialzip::core {
 
@@ -154,4 +155,78 @@ namespace belialzip::core {
         );
     }
 
+    //serializer
+    std::vector<uint8_t> serialize_freq_table(const std::array<uint32_t, 256>& freqs) {
+        //store in 2 bytes
+        uint16_t count = 0;
+        for( int i = 0; i< 256; i++){
+            if(freqs[i] > 0){
+                count++;
+            }
+        }
+
+        std::vector<uint8_t> out;
+
+        //write the count
+        out.push_back(count & 0xFF);
+        out.push_back((count >> 8) & 0xFF);
+        
+        //write each symbol and its freq
+        for(int sym = 0; sym < 256; sym++){
+
+            //skip symbos that don't appear
+            if(freqs[sym] == 0){
+                continue;
+            }
+
+            //write the symbol 
+            out.push_back(static_cast<uint8_t>(sym));
+
+            //write the freq
+            out.push_back(freqs[sym] & 0xFF);
+            out.push_back((freqs[sym] >> 8) & 0xFF);
+            out.push_back((freqs[sym] >> 16) & 0xFF);
+            out.push_back((freqs[sym] >> 24) & 0xFF);
+        }
+
+        return out;
+    
+    }
+    
+    std::pair<std::array<uint32_t, 256>, size_t> deserialize_freq_table(const uint8_t* data, size_t len) {
+        //at least 2 bytes just to read the count
+        if (len < 2) {
+            throw std::runtime_error("Freq table too short");
+        }
+        
+        // Read the count (glue the first 2 bytes together)
+        uint16_t count = static_cast<uint16_t>(data[0]) | (static_cast<uint16_t>(data[1]) << 8);
+        
+        //Calculate exact bytes needed = 2 (for count) + count * 5 (1 byte for symbol, 4 for freq)
+        size_t needed = 2 + static_cast<size_t>(count) * 5;
+        if (len < needed) {
+            throw std::runtime_error("Freq table truncated");
+        }
+        
+        std::array<uint32_t, 256> freqs = {0};
+        
+        //Read each entry
+        for (uint16_t i = 0; i < count; i++) {
+            // Calculate starting offset for this entry
+            size_t off = 2 + (i * 5);
+            
+            uint8_t sym = data[off];
+            
+            uint32_t f = 0;
+            f |= static_cast<uint32_t>(data[off+1]);
+            f |= static_cast<uint32_t>(data[off+2]) << 8;
+            f |= static_cast<uint32_t>(data[off+3]) << 16;
+            f |= static_cast<uint32_t>(data[off+4]) << 24;
+            
+            freqs[sym] = f;
+        }
+        
+        // return both the array and the number of bytes consumed
+        return {freqs, needed};
+    }
 }

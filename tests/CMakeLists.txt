@@ -11,3 +11,8 @@ add_test(NAME test_header COMMAND test_header)
 add_executable(test_bitstream test_bitstream.cpp)
 target_link_libraries(test_bitstream PRIVATE belialzip_lib)
 add_test(NAME test_bitstream COMMAND test_bitstream)
+
+#for huffman
+add_executable(test_huffman test_huffman.cpp)
+target_link_libraries(test_huffman PRIVATE belialzip_lib)
+add_test(NAME test_huffman COMMAND test_huffman)
