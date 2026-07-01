@@ -22,3 +22,8 @@ add_test(NAME test_huffman COMMAND test_huffman)
 add_executable(test_rle test_rle.cpp)
 target_link_libraries(test_rle PRIVATE belialzip_lib)
 add_test(NAME test_rle COMMAND test_rle)
+
+#for lz77
+add_executable(test_lz77 test_lz77.cpp)
+target_link_libraries(test_lz77 PRIVATE belialzip_lib)
+add_test(NAME test_lz77 COMMAND test_lz77)
